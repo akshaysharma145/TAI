@@ -9,6 +9,18 @@ namespace Unity.FPS.AI
     [RequireComponent(typeof(Health), typeof(Actor), typeof(NavMeshAgent))]
     public class EnemyController : MonoBehaviour
     {
+        [Header("Torch Freeze")]
+        public Light playerTorch;
+        [Header("Torch Darkness AI")]
+        public Transform player;
+        //public Light playerTorch;
+
+        public float activationRadius = 25f;
+        public float lightCheckDistance = 30f;
+
+        bool isActivated = false;
+        public float torchFreezeDistance = 20f;
+        
         [System.Serializable]
         public struct RendererIndexData
         {
@@ -199,10 +211,61 @@ namespace Unity.FPS.AI
                     m_EyeRendererData.MaterialIndex);
             }
         }
+        bool IsInTorchLight()
+        {
+            if (playerTorch == null) return false;
+
+            Vector3 dir = transform.position - playerTorch.transform.position;
+
+            float angle = Vector3.Angle(playerTorch.transform.forward, dir);
+
+            if (angle > playerTorch.spotAngle * 0.5f)
+                return false;
+
+            RaycastHit hit;
+
+            if (Physics.Raycast(playerTorch.transform.position, dir.normalized, out hit, lightCheckDistance))
+            {
+                if (hit.transform == transform)
+                    return true;
+            }
+
+            return false;
+        }
+        void HandleActivation()
+        {
+            float distance = Vector3.Distance(player.position, transform.position);
+
+            if (!isActivated && distance <= activationRadius)
+            {
+                isActivated = true;
+            }
+        }
+        void HandleDarknessMovement()
+        {
+            if (!isActivated)
+            {
+                NavMeshAgent.isStopped = true;
+                return;
+            }
+
+            if (IsInTorchLight())
+            {
+                NavMeshAgent.isStopped = true; // freeze
+            }
+            else
+            {
+                NavMeshAgent.isStopped = false;
+                NavMeshAgent.SetDestination(player.position); // follow player
+            }
+        }
 
         void Update()
         {
             EnsureIsWithinLevelBounds();
+
+            HandleActivation();
+            HandleDarknessMovement();
 
             DetectionModule.HandleTargetDetection(m_Actor, m_SelfColliders);
 
